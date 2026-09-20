@@ -3,6 +3,10 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --heatmap-empty: #ebedf0;
+  --heatmap-skip: #d4d4d8;
+  --card-bg: #ffffff;
+  --card-border: #e5e5e5;
 }
 
 @theme inline {
@@ -16,6 +20,10 @@
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
+    --heatmap-empty: #262626;
+    --heatmap-skip: #404040;
+    --card-bg: #171717;
+    --card-border: #2e2e2e;
   }
 }
 
