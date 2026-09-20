@@ -1,84 +1,32 @@
-'use client';
+import { createClient } from '@/lib/db/server';
+import { toHabitWithEntries, type HabitRow, type EntryRow } from '@/lib/db/mappers';
+import TodayClient from '@/components/TodayClient';
+import { mockQuote } from '@/lib/mockData';
 
-import { useState } from 'react';
-import QuoteBanner from '@/components/QuoteBanner';
-import HabitCheckItem from '@/components/HabitCheckItem';
-import { mockHabits, mockQuote } from '@/lib/mockData';
-import { isDueOn } from '@/lib/schedule';
-import type { HabitWithEntries } from '@/lib/types';
+export default async function TodayPage() {
+  const supabase = await createClient();
 
-function todayISO(): string {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
+  const { data: habitRows } = await supabase
+    .from('habits')
+    .select('id, name, colour, type, schedule_kind, schedule_config, started_on, if_then, anchor')
+    .eq('archived', false)
+    .order('created_at', { ascending: true });
 
-export default function TodayPage() {
-  const [habits, setHabits] = useState<HabitWithEntries[]>(mockHabits);
-  const today = todayISO();
+  const habitIds = (habitRows ?? []).map((h) => h.id);
 
-  function toggle(habitId: string) {
-    setHabits((prev) =>
-      prev.map((h) => {
-        if (h.id !== habitId) return h;
-        const existing = h.entries.find((e) => e.day === today);
-        if (existing) {
-          return { ...h, entries: h.entries.filter((e) => e.day !== today) };
-        }
-        return { ...h, entries: [...h.entries, { day: today, status: 'done' as const }] };
-      }),
-    );
-  }
+  const { data: entryRows } =
+    habitIds.length > 0
+      ? await supabase
+          .from('entries')
+          .select('habit_id, day, status')
+          .in('habit_id', habitIds)
+          .gte('day', new Date(Date.now() - 200 * 86400000).toISOString().slice(0, 10))
+      : { data: [] as EntryRow[] };
 
-  const dueHabits = habits.filter((h) =>
-    isDueOn(h.schedule, new Date(), new Date(h.startedOn + 'T00:00:00')),
-  );
-  const doneCount = dueHabits.filter((h) => h.entries.some((e) => e.day === today)).length;
+  const habits = (habitRows ?? []).map((h) => toHabitWithEntries(h as HabitRow, entryRows ?? []));
 
-  return (
-    <main className="max-w-2xl mx-auto px-4 py-8 space-y-6">
-      <header className="flex items-baseline justify-between">
-        <h1 className="text-2xl font-bold">Today</h1>
-        <span className="text-sm text-neutral-500">
-          {doneCount}/{dueHabits.length} done
-        </span>
-      </header>
+  // TODO(phase 4): personalise this against the user's actual data
+  const quote = mockQuote;
 
-      <QuoteBanner text={mockQuote.text} author={mockQuote.author} explanation={mockQuote.explanation} />
-
-      <section className="space-y-3">
-        {dueHabits.map((habit) => (
-          <HabitCheckItem
-            key={habit.id}
-            habit={habit}
-            doneToday={habit.entries.some((e) => e.day === today)}
-            onToggle={toggle}
-          />
-        ))}
-        {dueHabits.length === 0 && (
-          <p className="text-sm text-neutral-500">Nothing due today. Rest day.</p>
-        )}
-      </section>
-
-      {habits.length > dueHabits.length && (
-        <section className="pt-4 border-t" style={{ borderColor: 'var(--card-border)' }}>
-          <p className="text-xs text-neutral-500 mb-2">Not due today</p>
-          <div className="space-y-3 opacity-60">
-            {habits
-              .filter((h) => !dueHabits.includes(h))
-              .map((habit) => (
-                <HabitCheckItem
-                  key={habit.id}
-                  habit={habit}
-                  doneToday={habit.entries.some((e) => e.day === today)}
-                  onToggle={toggle}
-                />
-              ))}
-          </div>
-        </section>
-      )}
-    </main>
-  );
+  return <TodayClient initialHabits={habits} quote={quote} />;
 }
