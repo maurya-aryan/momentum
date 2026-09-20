@@ -15,7 +15,7 @@ export default function HabitCheckItem({ habit, doneToday, onToggle }: HabitChec
 
   return (
     <div
-      className="rounded-xl p-4"
+      className="rounded-xl p-4 card-blur h-full"
       style={{ backgroundColor: 'var(--card-bg)', border: '1px solid var(--card-border)' }}
     >
       <div className="flex items-center justify-between gap-4">
