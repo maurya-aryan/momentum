@@ -4,12 +4,15 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/db/client';
 import type { ScheduleKind } from '@/lib/schedule';
+import type { HabitSource } from '@/lib/types';
 
 const COLOURS = ['#22c55e', '#f59e0b', '#8b5cf6', '#0ea5e9', '#ef4444', '#ec4899', '#14b8a6'];
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export default function NewHabitPage() {
   const router = useRouter();
+  const [source, setSource] = useState<HabitSource>('manual');
+  const [externalUsername, setExternalUsername] = useState('');
   const [name, setName] = useState('');
   const [colour, setColour] = useState(COLOURS[0]);
   const [type, setType] = useState<'build' | 'quit'>('build');
@@ -21,6 +24,19 @@ export default function NewHabitPage() {
   const [anchor, setAnchor] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  function selectSource(next: HabitSource) {
+    setSource(next);
+    if (next === 'github') {
+      setName((n) => n || 'GitHub commits');
+      setColour('#0ea5e9');
+      setScheduleKind('daily');
+    } else if (next === 'leetcode') {
+      setName((n) => n || 'LeetCode');
+      setColour('#f59e0b');
+      setScheduleKind('daily');
+    }
+  }
 
   function scheduleConfig() {
     if (scheduleKind === 'days_of_week') return { days: selectedDays };
@@ -46,6 +62,12 @@ export default function NewHabitPage() {
       return;
     }
 
+    if (source !== 'manual' && !externalUsername.trim()) {
+      setError(`Enter your ${source === 'github' ? 'GitHub' : 'LeetCode'} username.`);
+      setSaving(false);
+      return;
+    }
+
     const { error } = await supabase.from('habits').insert({
       user_id: user.id,
       name: name.trim(),
@@ -55,6 +77,8 @@ export default function NewHabitPage() {
       schedule_config: scheduleConfig(),
       if_then: ifThen.trim() || null,
       anchor: anchor.trim() || null,
+      source,
+      external_username: source !== 'manual' ? externalUsername.trim() : null,
     });
 
     setSaving(false);
@@ -62,6 +86,13 @@ export default function NewHabitPage() {
       setError(error.message);
       return;
     }
+
+    if (source === 'github') {
+      fetch('/api/sync/github', { method: 'POST' }).catch(() => {});
+    } else if (source === 'leetcode') {
+      fetch('/api/sync/leetcode', { method: 'POST' }).catch(() => {});
+    }
+
     router.push('/');
     router.refresh();
   }
@@ -75,6 +106,50 @@ export default function NewHabitPage() {
     <main className="max-w-md mx-auto px-4 py-8">
       <h1 className="text-2xl font-bold mb-6">Add habit</h1>
       <form onSubmit={handleSubmit} className="space-y-5">
+        <div>
+          <label className="block text-sm font-medium mb-1">Source</label>
+          <div className="flex gap-2">
+            {(
+              [
+                ['manual', 'Manual'],
+                ['github', 'GitHub'],
+                ['leetcode', 'LeetCode'],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => selectSource(value)}
+                className={`flex-1 rounded-lg px-3 py-2 text-sm ${source === value ? 'font-semibold' : ''}`}
+                style={{ ...inputStyle, opacity: source === value ? 1 : 0.5 }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-neutral-500 mt-1">
+            {source === 'manual'
+              ? 'You check this in yourself.'
+              : `Auto-filled from your real ${source === 'github' ? 'commits' : 'submissions'} — synced automatically, no manual check-in needed.`}
+          </p>
+        </div>
+
+        {source !== 'manual' && (
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              {source === 'github' ? 'GitHub username' : 'LeetCode username'}
+            </label>
+            <input
+              value={externalUsername}
+              onChange={(e) => setExternalUsername(e.target.value)}
+              placeholder={source === 'github' ? 'maurya-aryan' : 'your-leetcode-handle'}
+              required
+              className="w-full rounded-lg px-3 py-2 text-sm"
+              style={inputStyle}
+            />
+          </div>
+        )}
+
         <div>
           <label className="block text-sm font-medium mb-1">Name</label>
           <input
@@ -129,6 +204,7 @@ export default function NewHabitPage() {
           </div>
         </div>
 
+        {source === 'manual' && (
         <div>
           <label className="block text-sm font-medium mb-1">Schedule</label>
           <select
@@ -190,6 +266,7 @@ export default function NewHabitPage() {
             />
           )}
         </div>
+        )}
 
         <details className="text-sm">
           <summary className="cursor-pointer text-neutral-500">

@@ -8,7 +8,9 @@ export default async function TodayPage() {
 
   const { data: habitRows } = await supabase
     .from('habits')
-    .select('id, name, colour, type, schedule_kind, schedule_config, started_on, if_then, anchor')
+    .select(
+      'id, name, colour, type, schedule_kind, schedule_config, started_on, if_then, anchor, source, external_username',
+    )
     .eq('archived', false)
     .order('created_at', { ascending: true });
 

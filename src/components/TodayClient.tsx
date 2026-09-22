@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import QuoteBanner from './QuoteBanner';
 import HabitCheckItem from './HabitCheckItem';
@@ -21,11 +22,45 @@ function todayISO(): string {
   return `${y}-${m}-${day}`;
 }
 
+const SYNC_THROTTLE_MS = 5 * 60 * 1000; // don't hammer GitHub/LeetCode more than once per 5 min
+
 export default function TodayClient({ initialHabits, quote }: TodayClientProps) {
+  const router = useRouter();
   const [habits, setHabits] = useState<HabitWithEntries[]>(initialHabits);
   const [pending, setPending] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const hasAutoSynced = useRef(false);
   const today = todayISO();
   const supabase = createClient();
+
+  useEffect(() => {
+    setHabits(initialHabits);
+  }, [initialHabits]);
+
+  const hasGithub = habits.some((h) => h.source === 'github');
+  const hasLeetcode = habits.some((h) => h.source === 'leetcode');
+
+  async function runSync(force = false) {
+    if (!hasGithub && !hasLeetcode) return;
+    const lastSync = Number(localStorage.getItem('momentum:lastSync') ?? 0);
+    if (!force && Date.now() - lastSync < SYNC_THROTTLE_MS) return;
+
+    setSyncing(true);
+    await Promise.all([
+      hasGithub ? fetch('/api/sync/github', { method: 'POST' }).catch(() => {}) : null,
+      hasLeetcode ? fetch('/api/sync/leetcode', { method: 'POST' }).catch(() => {}) : null,
+    ]);
+    localStorage.setItem('momentum:lastSync', String(Date.now()));
+    setSyncing(false);
+    router.refresh();
+  }
+
+  useEffect(() => {
+    if (hasAutoSynced.current) return;
+    hasAutoSynced.current = true;
+    runSync(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasGithub, hasLeetcode]);
 
   async function toggle(habitId: string) {
     const habit = habits.find((h) => h.id === habitId);
@@ -68,9 +103,34 @@ export default function TodayClient({ initialHabits, quote }: TodayClientProps) 
     <main className="max-w-[1400px] w-full mx-auto px-6 md:px-10 py-8 space-y-6 flex-1">
       <header className="flex items-baseline justify-between">
         <h1 className="text-2xl font-bold">Today</h1>
-        <span className="text-sm text-neutral-500">
-          {doneCount}/{dueHabits.length} done
-        </span>
+        <div className="flex items-center gap-3">
+          {(hasGithub || hasLeetcode) && (
+            <button
+              onClick={() => runSync(true)}
+              disabled={syncing}
+              className="text-xs text-neutral-500 hover:text-neutral-300 flex items-center gap-1 disabled:opacity-50"
+              title="Sync GitHub / LeetCode now"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`}
+              >
+                <path
+                  d="M4 4v5h5M20 20v-5h-5M4 9a8 8 0 0 1 14.5-4.5M20 15a8 8 0 0 1-14.5 4.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              {syncing ? 'Syncing…' : 'Sync now'}
+            </button>
+          )}
+          <span className="text-sm text-neutral-500">
+            {doneCount}/{dueHabits.length} done
+          </span>
+        </div>
       </header>
 
       <QuoteBanner text={quote.text} author={quote.author} explanation={quote.explanation} />

@@ -12,6 +12,8 @@ export interface HabitRow {
   started_on: string;
   if_then: string | null;
   anchor: string | null;
+  source: 'manual' | 'github' | 'leetcode';
+  external_username: string | null;
 }
 
 export interface EntryRow {
@@ -30,6 +32,8 @@ export function toHabitWithEntries(habit: HabitRow, entries: EntryRow[]): HabitW
     startedOn: habit.started_on,
     ifThen: habit.if_then ?? undefined,
     anchor: habit.anchor ?? undefined,
+    source: habit.source,
+    externalUsername: habit.external_username ?? undefined,
     entries: entries
       .filter((e) => e.habit_id === habit.id)
       .map((e) => ({ day: e.day, status: e.status })),

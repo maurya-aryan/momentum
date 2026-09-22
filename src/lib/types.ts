@@ -1,6 +1,8 @@
 import type { Schedule } from './schedule';
 import type { Entry, EntryStatus } from './streaks';
 
+export type HabitSource = 'manual' | 'github' | 'leetcode';
+
 export interface Habit {
   id: string;
   name: string;
@@ -10,6 +12,8 @@ export interface Habit {
   startedOn: string; // ISO date
   ifThen?: string;
   anchor?: string;
+  source: HabitSource;
+  externalUsername?: string;
 }
 
 export interface HabitWithEntries extends Habit {
